@@ -1,1 +1,67 @@
 Código para ser usado em Google Colab
+
+!pip install folium
+import folium
+from folium import plugins
+import geopandas as gpd
+from folium.plugins import HeatMap
+
+# Carregar o shapefile de polígonos
+poligono_shapefile_path = '/content/Poligono_Talhao.shp'
+poligono_gdf = gpd.read_file(poligono_shapefile_path)
+
+# Carregar o shapefile de pontos das parcelas - Com dados dos nossos Diâmetros (DAP)
+pontos_shapefile_path = '/content/Pontos_amostras.shp'
+pontos_gdf = gpd.read_file(pontos_shapefile_path)
+
+# Reprojetar ambos os conjuntos de dados para 'EPSG:4326'
+poligono_gdf = poligono_gdf.to_crs(epsg='4326')
+pontos_gdf = pontos_gdf.to_crs(epsg='4326')
+
+# Criar um mapa do folium centrado nas coordenadas dos polígonos.
+mapa = folium.Map(location=[poligono_gdf['geometry'].centroid.y.mean(), poligono_gdf['geometry'].centroid.x.mean()], zoom_start=30)
+
+# Adicionar GeoJSON do perímetro da área ao mapa
+geojson_data = poligono_gdf.__geo_interface__
+folium.GeoJson(geojson_data).add_to(mapa)
+
+# Criar o mapa de calor como uma camada separada
+mapa_calor = plugins.HeatMap(pontos_gdf[['Coord_X', 'Coord_Y', 'DAP']].values, radius=15)
+mapa_calor.add_to(mapa)
+
+
+# Crie um grupo de camadas para as camadas TileLayer
+tile_layer_group = folium.FeatureGroup(name="Base Maps")
+
+# Adicionando o controle de camadas ao mapa para alternar entre diferentes camadas dos layers
+folium.LayerControl().add_to(mapa)
+
+# Adicione as opções de camadas ao grupo de camadas
+tile_options = {
+    'OpenStreetMap': folium.TileLayer(tiles='OpenStreetMap', name='OpenStreetMap').add_to(tile_layer_group),
+    'Esri World Imagery': folium.TileLayer(tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', name='Esri World Imagery', attr='Esri World Imagery').add_to(tile_layer_group),
+}
+
+# Adicione o grupo de camadas ao mapa
+tile_layer_group.add_to(mapa)
+
+# Criar uma Layer de Calor com os dados dos pontos
+heat_data = [[point.xy[1][0], point.xy[0][0]] for point in pontos_gdf.geometry]
+plugins.HeatMap(heat_data).add_to(mapa)
+
+# Adicione uma legenda ao mapa
+legend_html = '''
+    <div style="position: fixed; bottom: 50px; left: 50px; z-index: 1000; font-size: 14px; background-color: white; padding: 10px;">
+        <b>Legenda:</b><br>
+        Mapa de Calor: DAP médios -  Parcelas<br>
+    </div>
+'''
+mapa.get_root().html.add_child(folium.Element(legend_html))
+
+
+
+# Salve o mapa como HTML
+mapa.save('/content/mapa.html')
+
+# Exiba o mapa
+mapa
